@@ -1,0 +1,372 @@
+Here’s a clean, professional **Product Requirements Document (PRD)** for your Stage 1 backend project. This is exactly the kind of structure reviewers expect in a solid GitHub README or planning doc.
+
+---
+
+# 📄 Product Requirements Document (PRD)
+
+## Project: Profile Intelligence Service
+
+---
+
+## 1. Overview
+
+The **Profile Intelligence Service** is a backend system that accepts a user’s name, enriches it using multiple third-party APIs, processes the data, stores it in a database, and exposes RESTful endpoints for managing and retrieving the data.
+
+This system demonstrates backend engineering fundamentals including API integration, data modeling, persistence, idempotency, and error handling.
+
+---
+
+## 2. Objectives
+
+The system must:
+
+* Integrate with multiple external APIs
+* Process and normalize returned data
+* Persist structured data in a database
+* Provide RESTful endpoints for CRUD operations
+* Handle duplicate requests intelligently (idempotency)
+* Return consistent and well-structured JSON responses
+
+---
+
+## 3. Scope
+
+### In Scope
+
+* Backend API development
+* Third-party API integration
+* Database design and persistence
+* Filtering and querying
+* Error handling and validation
+
+### Out of Scope
+
+* Frontend/UI
+* Authentication/authorization
+* Rate limiting
+* Advanced analytics
+
+---
+
+## 4. External Dependencies
+
+The system integrates with the following APIs:
+
+* **Genderize API**
+  `https://api.genderize.io?name={name}`
+
+* **Agify API**
+  `https://api.agify.io?name={name}`
+
+* **Nationalize API**
+  `https://api.nationalize.io?name={name}`
+
+---
+
+## 5. Functional Requirements
+
+### 5.1 Data Processing Logic
+
+For a given `name`:
+
+#### Gender Data
+
+* Extract:
+
+  * `gender`
+  * `probability` → `gender_probability`
+  * `count` → `sample_size`
+
+#### Age Data
+
+* Extract:
+
+  * `age`
+* Derive `age_group`:
+
+  * 0–12 → child
+  * 13–19 → teenager
+  * 20–59 → adult
+  * 60+ → senior
+
+#### Nationality Data
+
+* Extract `country` list
+* Select country with **highest probability**
+* Store:
+
+  * `country_id`
+  * `country_probability`
+
+---
+
+### 5.2 Data Model
+
+**Profile Object**
+
+```json
+{
+  "id": "uuid-v7",
+  "name": "string",
+  "gender": "string",
+  "gender_probability": "number",
+  "sample_size": "number",
+  "age": "number",
+  "age_group": "string",
+  "country_id": "string",
+  "country_probability": "number",
+  "created_at": "ISO8601 UTC"
+}
+```
+
+---
+
+### 5.3 API Endpoints
+
+---
+
+#### 1. Create Profile
+
+**POST /api/profiles**
+
+**Request:**
+
+```json
+{ "name": "ella" }
+```
+
+**Behavior:**
+
+* Calls all 3 APIs
+* Processes and stores result
+* Ensures idempotency (no duplicates)
+
+**Success Response (201):**
+
+```json
+{
+  "status": "success",
+  "data": { ...profile }
+}
+```
+
+**Duplicate Response:**
+
+```json
+{
+  "status": "success",
+  "message": "Profile already exists",
+  "data": { ...existing profile }
+}
+```
+
+---
+
+#### 2. Get Single Profile
+
+**GET /api/profiles/{id}**
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": { ...profile }
+}
+```
+
+---
+
+#### 3. Get All Profiles
+
+**GET /api/profiles**
+
+**Query Parameters (optional, case-insensitive):**
+
+* `gender`
+* `country_id`
+* `age_group`
+
+**Example:**
+
+```
+/api/profiles?gender=male&country_id=NG
+```
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "count": 2,
+  "data": [ ...profiles ]
+}
+```
+
+---
+
+#### 4. Delete Profile
+
+**DELETE /api/profiles/{id}**
+
+**Response:**
+
+* `204 No Content`
+
+---
+
+## 6. Idempotency Rules
+
+* A profile is **unique by name**
+* If a name already exists:
+
+  * Do NOT create a new record
+  * Return existing profile
+
+---
+
+## 7. Error Handling
+
+### Standard Error Format
+
+```json
+{
+  "status": "error",
+  "message": "error message"
+}
+```
+
+---
+
+### Error Cases
+
+| Status Code | Scenario              |
+| ----------- | --------------------- |
+| 400         | Missing or empty name |
+| 422         | Invalid data type     |
+| 404         | Profile not found     |
+| 500         | Internal server error |
+| 502         | External API failure  |
+
+---
+
+### External API Failures
+
+Return:
+
+```json
+{
+  "status": "error",
+  "message": "Genderize returned an invalid response"
+}
+```
+
+**Conditions:**
+
+* Genderize → `gender = null` OR `count = 0`
+* Agify → `age = null`
+* Nationalize → no country data
+
+---
+
+## 8. Non-Functional Requirements
+
+### 8.1 Performance
+
+* API response time should be minimal (<2–3 seconds depending on external APIs)
+
+### 8.2 Reliability
+
+* Must handle external API failures gracefully
+
+### 8.3 Data Consistency
+
+* Ensure no duplicate records (idempotency)
+
+### 8.4 Security
+
+* Basic validation required (no auth required)
+
+---
+
+## 9. Technical Requirements
+
+* Use any backend language/framework
+* Database required (SQL or NoSQL)
+* Use UUID v7 for IDs
+* Timestamps must be ISO 8601 (UTC)
+* Enable CORS:
+
+```
+Access-Control-Allow-Origin: *
+```
+
+---
+
+## 10. Suggested Architecture
+
+**Flow:**
+
+```
+Client → API → External APIs → Processing Logic → Database → Response
+```
+
+**Components:**
+
+* Controller (handles requests)
+* Service Layer (API calls + logic)
+* Database Layer (CRUD operations)
+
+---
+
+## 11. Database Design (Example)
+
+### Table: profiles
+
+| Column              | Type          |
+| ------------------- | ------------- |
+| id                  | UUID v7       |
+| name                | TEXT (unique) |
+| gender              | TEXT          |
+| gender_probability  | FLOAT         |
+| sample_size         | INTEGER       |
+| age                 | INTEGER       |
+| age_group           | TEXT          |
+| country_id          | TEXT          |
+| country_probability | FLOAT         |
+| created_at          | TIMESTAMP     |
+
+---
+
+## 12. Acceptance Criteria
+
+The system is considered complete if:
+
+* All endpoints work correctly
+* Data is stored and retrieved properly
+* Duplicate names do not create new records
+* Filtering works as expected
+* Errors follow required format
+* External API failures handled correctly
+* API is deployed and publicly accessible
+
+---
+
+## 13. Deployment Requirements
+
+* Must be hosted on:
+
+  * Railway / Vercel / Heroku / AWS / etc.
+* Must NOT use Render
+* API must be publicly accessible
+
+---
+
+## 14. Submission Requirements
+
+You must provide:
+
+1. GitHub repository (public, with README)
+2. Live API base URL
+3. Fully working endpoints
+
